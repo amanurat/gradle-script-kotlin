@@ -2,15 +2,15 @@ package org.gradle.script.lang.kotlin.support
 
 import org.gradle.api.internal.ClassPathRegistry
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
-import org.jetbrains.kotlin.script.GetScriptDependencies
 import org.jetbrains.kotlin.script.KotlinScriptExternalDependencies
-import org.jetbrains.kotlin.script.SimpleUntypedAst
+import org.jetbrains.kotlin.script.ScriptDependenciesResolver
+import org.jetbrains.kotlin.script.SimpleAnnotationAst
 import org.jetbrains.kotlin.script.parseAnnotation
 import java.io.File
 
-class GetGradleKotlinScriptDependencies : GetScriptDependencies {
+class GetGradleKotlinScriptDependencies : ScriptDependenciesResolver {
 
-    override operator fun invoke(annotations: Iterable<KtAnnotationEntry>, context: Any?): KotlinScriptExternalDependencies? {
+    override fun resolve(projectRoot: File?, scriptFile: File?, annotations: Iterable<KtAnnotationEntry>, context: Any?): KotlinScriptExternalDependencies? {
         fun File.existingOrNull() = let { if (it.exists() && it.isDirectory) it else null }
         fun File.listPrefixedJars(prefixes: Iterable<String>): Iterable<File> = listFiles { file -> prefixes.any { file.name.startsWith(it) } }.asIterable()
         return when (context) {
@@ -37,7 +37,7 @@ class GetGradleKotlinScriptDependencies : GetScriptDependencies {
         val cp = anns.flatMap {
             it.value.mapNotNull {
                 when (it) {
-                    is SimpleUntypedAst.Node.str -> File(it.value)
+                    is SimpleAnnotationAst.Node.str -> File(it.value)
                     else -> null
                 }
             }
