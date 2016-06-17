@@ -1,6 +1,7 @@
 package org.gradle.script.lang.kotlin.support
 
 import org.gradle.api.internal.ClassPathRegistry
+import org.gradle.tooling.ProjectConnection
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.script.KotlinScriptExternalDependencies
 import org.jetbrains.kotlin.script.ScriptDependenciesResolver
@@ -13,20 +14,34 @@ class GetGradleKotlinScriptDependencies : ScriptDependenciesResolver {
     override fun resolve(projectRoot: File?, scriptFile: File?, annotations: Iterable<KtAnnotationEntry>, context: Any?): KotlinScriptExternalDependencies? {
         fun File.existingOrNull() = let { if (it.exists() && it.isDirectory) it else null }
         fun File.listPrefixedJars(prefixes: Iterable<String>): Iterable<File> = listFiles { file -> prefixes.any { file.name.startsWith(it) } }.asIterable()
+
+        fun depsFromGradleHome(gradleHome: File): KotlinScriptExternalDependencies? {
+            val libDir = File(gradleHome, "lib").existingOrNull()
+            val pluginsDir = libDir?.let { File(libDir, "plugins") }?.existingOrNull()
+            val classpath = (libDir?.listPrefixedJars(defaultDependenciesJarsPrefixes) ?: emptyList()) +
+                (pluginsDir?.listPrefixedJars(defaultDependenciesJarsPrefixes) ?: emptyList())
+            return if (classpath.size < defaultDependenciesJarsPrefixes.size) {
+                // log
+                null
+            } else {
+                makeDependencies(annotations, classpath.asIterable())
+            }
+        }
+
+        fun depsFromGradleHomeAndProjectConnection(gradleHome: File?, projectConnection: ProjectConnection?): KotlinScriptExternalDependencies? {
+            return if (projectConnection == null || gradleHome == null) null
+                   else depsFromGradleHome(gradleHome)
+        }
+
         return when (context) {
             is ClassPathRegistry -> makeDependencies(annotations, KotlinScriptDefinitionProvider.selectGradleApiJars(context))
             is File -> {
-                val libDir = File(context, "lib").existingOrNull()
-                val pluginsDir = libDir?.let { File(libDir, "plugins") }?.existingOrNull()
-                val classpath = (libDir?.listPrefixedJars(defaultDependenciesJarsPrefixes) ?: emptyList()) +
-                                (pluginsDir?.listPrefixedJars(defaultDependenciesJarsPrefixes) ?: emptyList())
-                if (classpath.size < defaultDependenciesJarsPrefixes.size) {
-                    // log
-                    null
-                }
-                else {
-                    makeDependencies(annotations, classpath.asIterable())
-                }
+                depsFromGradleHome(context)
+            }
+            is Map<*,*> -> {
+                depsFromGradleHomeAndProjectConnection(
+                    context["gradleHome"]?.let { it as? File },
+                    context["projectConnection"]?.let { it as? ProjectConnection })
             }
             else -> null
         }

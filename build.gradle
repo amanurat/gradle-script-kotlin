@@ -12,6 +12,9 @@ buildscript {
 
 apply from: 'build.gradle.kts'
 
+dependencies {
+    compile gradleApi()
+}
 
 // -- Performance testing ----------------------------------------------
 //
